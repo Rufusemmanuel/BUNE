@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useAccount, useConnect, useDisconnect, useWriteContract, useBalance } from 'wagmi'
-import { createPublicClient, formatEther, http, getAddress } from 'viem'
+import { useAccount, useConnect, useDisconnect, useWriteContract, useSwitchChain } from 'wagmi'
+import { createPublicClient, formatEther, http, encodeFunctionData, toHex, getAddress } from 'viem'
 import { base, baseSepolia } from 'viem/chains'
 import { abi } from '../abi'
 
@@ -11,6 +11,7 @@ export default function App() {
   const { isConnected, address, chainId } = useAccount()
   const { disconnect } = useDisconnect()
   const { writeContractAsync, status: writeStatus } = useWriteContract()
+  const { switchChainAsync } = useSwitchChain()
   const [error, setError] = useState<string | null>(null)
   const [round, setRound] = useState<any>(null)
   const [roundId, setRoundId] = useState<bigint>(0n)
@@ -20,20 +21,22 @@ export default function App() {
   const [winners, setWinners] = useState<any[]>([])
   const [now, setNow] = useState<number>(Math.floor(Date.now()/1000))
   const rpcUrl = import.meta.env.VITE_RPC_URL as string
-  const contract = import.meta.env.VITE_CONTRACT_ADDRESS as `0x${string}`
-  const client = useMemo(() => createPublicClient({ chain: chainId===base.id?base:baseSepolia, transport: http(rpcUrl) }), [rpcUrl, chainId])
+  const contract = getAddress(import.meta.env.VITE_CONTRACT_ADDRESS as string) as `0x${string}`
+  const desiredChainId = Number(import.meta.env.VITE_CHAIN_ID || 84532)
+  const desiredChain = desiredChainId === base.id ? base : baseSepolia
+  const client = useMemo(() => createPublicClient({ chain: desiredChain, transport: http(rpcUrl) }), [rpcUrl, desiredChainId])
 
   async function refresh() {
     try {
       const [rid, fee, r] = await Promise.all([
-        client.readContract({ address: contract, abi, functionName: 'currentRoundId' }) as Promise<bigint>,
-        client.readContract({ address: contract, abi, functionName: 'entryFeeWei' }) as Promise<bigint>,
-        client.readContract({ address: contract, abi, functionName: 'currentRound' })
+        (client as any).readContract({ address: contract, abi: abi as any, functionName: 'currentRoundId' }) as Promise<bigint>,
+        (client as any).readContract({ address: contract, abi: abi as any, functionName: 'entryFeeWei' }) as Promise<bigint>,
+        (client as any).readContract({ address: contract, abi: abi as any, functionName: 'currentRound' })
       ])
       setRoundId(rid)
       setEntryFee(fee)
       setRound(r)
-      const gs = await client.readContract({ address: contract, abi, functionName: 'getGuesses', args: [rid] }) as any[]
+      const gs = await (client as any).readContract({ address: contract, abi: abi as any, functionName: 'getGuesses', args: [rid] }) as any[]
       setGuesses(gs)
       setError(null)
     } catch (e: any) {
@@ -50,11 +53,11 @@ export default function App() {
 
   useEffect(() => { (async () => {
     try {
-      const count = await client.readContract({ address: contract, abi, functionName: 'priorWinnersCount' }) as bigint
+      const count = await (client as any).readContract({ address: contract, abi: abi as any, functionName: 'priorWinnersCount' }) as bigint
       const items: any[] = []
       const start = count > 10n ? count - 10n : 0n
       for (let i = count; i > start; i--) {
-        const rec = await client.readContract({ address: contract, abi, functionName: 'getWinnerAt', args: [i - 1n] })
+        const rec = await (client as any).readContract({ address: contract, abi: abi as any, functionName: 'getWinnerAt', args: [i - 1n] })
         items.push(rec)
       }
       setWinners(items)
@@ -65,34 +68,88 @@ export default function App() {
     if (!guess || guess < 1 || guess > 1000) { setError('Enter 1..1000'); return }
     try {
       setError(null)
-      await writeContractAsync({ address: contract, abi, functionName: 'submitGuess', args: [guess], value: entryFee })
+      // If running inside Farcaster miniapp (or any in‑app wallet), prefer direct EIP‑1193 send
+      if (onMiniapp && typeof window !== 'undefined' && (window as any).ethereum?.request) {
+        const eth = (window as any).ethereum
+        // Ensure desired chain from env (Base mainnet 8453 or Sepolia 84532)
+        const hexChain = '0x' + desiredChainId.toString(16)
+        try { await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hexChain }] }) } catch {}
+        // Request accounts if needed
+        try { await eth.request({ method: 'eth_requestAccounts' }) } catch {}
+        const data = encodeFunctionData({ abi: abi as any, functionName: 'submitGuess', args: [guess] })
+        const tx = {
+          to: contract,
+          data,
+          value: toHex(entryFee)
+        }
+        const hash = await eth.request({ method: 'eth_sendTransaction', params: [tx] })
+        // Optionally wait via public client
+        try { await (client as any).waitForTransactionReceipt?.({ hash }) } catch {}
+      } else {
+        // Fallback to wagmi/viem write
+        await writeContractAsync({ address: contract, abi: abi as any, functionName: 'submitGuess', args: [guess as any], value: entryFee, chainId: desiredChainId } as any)
+      }
       await refresh()
     } catch (e: any) { setError(e?.shortMessage || e?.message || String(e)) }
   }
 
   const endsIn = round ? Math.max(0, Number(round.endTime) - now) : 0
 
-  const onMiniapp = typeof window !== 'undefined' && window.location.pathname === '/miniapp'
+  const onMiniapp = typeof window !== 'undefined' && (window.location.pathname === '/miniapp' || /Farcaster|Warpcast/i.test(navigator.userAgent))
+
+  const mismatch = isConnected && typeof chainId === 'number' && chainId !== desiredChainId
+
+  async function switchToDesired() {
+    try {
+      const hex = '0x' + desiredChainId.toString(16)
+      if ((window as any)?.ethereum?.request) {
+        await (window as any).ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] })
+      } else {
+        await switchChainAsync?.({ chainId: desiredChainId })
+      }
+      setError(null)
+    } catch (e:any) {
+      setError(e?.message || String(e))
+    }
+  }
+
+  async function connectPreferred() {
+    try {
+      const preferred = connectors.find(c => c.name === 'Injected') || connectors[0]
+      if (!preferred) throw new Error('No wallet connector available')
+      await connect({ connector: preferred })
+      try { await switchChainAsync?.({ chainId: baseSepolia.id }) } catch {}
+    } catch (e:any) { setError(e?.message || String(e)) }
+  }
 
   return (
-    <div style={{ padding: 16 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ margin: 0 }}>GuessRounds</h2>
-        <div>
+    <div className="gr-app" style={{ padding: 16 }}>
+      <header className="gr-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 className="gr-title" style={{ margin: 0 }}>BUNE</h2>
+        <div className="gr-connect">
           {isConnected ? (
-            <button onClick={() => disconnect()} title={address || ''} style={{ padding: '6px 10px' }}>{truncate(address)}</button>
+            <button className="gr-btn gr-btn-ghost" onClick={() => disconnect()} title={address || ''} style={{ padding: '6px 10px' }}>{truncate(address)}</button>
           ) : (
-            connectors.map(c => (
-              <button key={c.uid} onClick={() => connect({ connector: c })} disabled={!c.ready} style={{ padding: '6px 10px', marginLeft: 8 }}>{c.name}</button>
-            ))
+            <button className="gr-btn" onClick={connectPreferred} style={{ padding: '6px 10px', marginLeft: 8 }}>
+              {onMiniapp ? 'Farcaster Wallet' : 'Browser Wallet'}
+            </button>
           )}
         </div>
       </header>
 
-      {error && <div style={{ background: '#311', border: '1px solid #633', padding: 8, marginTop: 12 }}>{error}</div>}
+      {mismatch && (
+        <div className="gr-alert" style={{ marginTop: 12 }}>
+          The current wallet chain ({chainId}) does not match the app target ({desiredChainId}).
+          <div style={{ marginTop: 8 }}>
+            <button className="gr-btn" onClick={switchToDesired}>Switch to Base</button>
+          </div>
+        </div>
+      )}
+
+      {error && <div className="gr-alert" style={{ background: '#311', border: '1px solid #633', padding: 8, marginTop: 12 }}>{error}</div>}
 
       {round && (
-        <section style={{ marginTop: 16, border: '1px solid #2c2c2e', borderRadius: 12, padding: 16 }}>
+        <section className="gr-card" style={{ marginTop: 16, border: '1px solid #2c2c2e', borderRadius: 12, padding: 16 }}>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             <div><div style={{opacity:0.7}}>Round</div><strong>#{String(roundId)}</strong></div>
             <div><div style={{opacity:0.7}}>Active</div><strong>{round.active ? 'Yes' : 'No'}</strong></div>
@@ -101,34 +158,31 @@ export default function App() {
             <div><div style={{opacity:0.7}}>Guesses</div><strong>{String(round.guessesCount)}</strong></div>
             <div><div style={{opacity:0.7}}>Entry</div><strong>{formatEther(entryFee)} ETH</strong></div>
           </div>
-          <div style={{ marginTop: 12 }}>Countdown: {Math.floor(endsIn/60)}m {endsIn%60}s</div>
+          <div className="gr-countdown" style={{ marginTop: 12 }}>Countdown: {Math.floor(endsIn/60)}m {endsIn%60}s</div>
           {!onMiniapp && (
-            <div style={{ marginTop: 12 }}>
-              <input type="number" min={1} max={1000} value={guess||''} onChange={e=>setGuess(Number(e.target.value))} style={{ padding: 8, borderRadius: 8, border: '1px solid #3a3a3c', background: '#111', color: '#eee' }} />
-              <button onClick={submit} style={{ marginLeft: 8, padding: '8px 12px' }}>Submit Guess</button>
+            <div className="gr-form" style={{ marginTop: 12 }}>
+              <input className="gr-input" type="number" min={1} max={1000} value={guess||''} onChange={e=>setGuess(Number(e.target.value))} placeholder="Your guess (1..1000)" />
+              <button className="gr-btn" onClick={submit} style={{ marginLeft: 8, padding: '8px 12px' }}>Submit Guess</button>
             </div>
           )}
         </section>
       )}
 
-      <section style={{ marginTop: 16 }}>
-        <h3>Live Activity</h3>
-        <button onClick={refresh} style={{ padding: '6px 10px' }}>Refresh</button>
-        <ul>
+      <section className="gr-section" style={{ marginTop: 16 }}>
+        <div className="gr-section-head"><h3>Live Activity</h3><button className="gr-btn gr-btn-ghost" onClick={refresh} style={{ padding: '6px 10px' }}>Refresh</button></div>
+        <ul className="gr-list">
           {guesses.slice().reverse().slice(0, 20).map((g, i) => (
-            <li key={i} style={{ opacity: 0.9 }}>{truncate(g.player)} guessed {g.number} at {new Date(Number(g.timestamp)*1000).toLocaleTimeString()}</li>
+            <li key={i} className="gr-list-item"><span className="gr-tag">{truncate(g.player)}</span> guessed <strong>{g.number}</strong> at {new Date(Number(g.timestamp)*1000).toLocaleTimeString()}</li>
           ))}
         </ul>
       </section>
 
-      <section style={{ marginTop: 16 }}>
+      <section className="gr-section" style={{ marginTop: 16 }}>
         <h3>History (latest)</h3>
         {winners.length === 0 ? <p>No winners yet.</p> : (
-          <ul>
+          <ul className="gr-list">
             {winners.map((w, idx) => (
-              <li key={idx}>
-                Round #{String(w.roundId)} — Winner {truncate(w.winner)} — Target {String(w.target)} — Prize {formatEther(w.prize)} ETH
-              </li>
+              <li key={idx} className="gr-list-item">Round #{String(w.roundId)} — Winner {truncate(w.winner)} — Target {String(w.target)} — Prize {formatEther(w.prize)} ETH</li>
             ))}
           </ul>
         )}
