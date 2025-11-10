@@ -12,7 +12,7 @@
     "version": "1",
     "name": "BUNE",
     "homeUrl": "https://bune-again.vercel.app/miniapp",
-    "iconUrl": "https://placehold.co/512x512.png?text=BUNE",
+    "iconUrl": "https://bune-again.vercel.app/icon-512.png",
     "splashImageUrl": "https://placehold.co/1200x800/png?text=BUNE",
     "splashBackgroundColor": "#0d111c",
     "description": "Guess the number, closest wins the pot on Base.",
@@ -33,7 +33,7 @@
   "frame": {
     "version": "1",
     "name": "Example Frame",
-    "iconUrl": "https://placehold.co/256x256/png?text=BUNE",
+    "iconUrl": "https://bune-again.vercel.app/icon-512.png",
     "homeUrl": "https://bune-again.vercel.app",
     "imageUrl": "https://placehold.co/1200x630/png?text=BUNE+Frame",
     "buttonTitle": "Check this out",
