@@ -122,3 +122,16 @@ Features:
 - Replace any placeholder Chainlink VRF parameters with the exact values for Base networks.
 - Enforce rate limits and add robust error handling in the UI.
 - Consider subgraph/indexer for scalable history and activity feeds.
+
+## Automatic Deploys (Vercel)
+
+The repo includes a GitHub Action that triggers a Vercel Deploy Hook on every push to `main`.
+
+1. In Vercel: Project ? Settings ? Git ? Deploy Hooks ? Create Hook (branch: `main`).
+2. Copy the hook URL.
+3. In GitHub: Repo ? Settings ? Secrets and variables ? Actions ? New repository secret:
+   - Name: `VERCEL_DEPLOY_HOOK_URL`
+   - Value: the hook URL from step 1.
+4. Push to `main` — Vercel will auto-deploy. You can also run the workflow manually from the Actions tab.
+
+This works alongside Vercel’s native Git auto-deploy. The hook guarantees a build even when only env/manifest changes occur.
