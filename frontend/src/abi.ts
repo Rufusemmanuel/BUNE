@@ -1,4 +1,5 @@
 export const abi = [
+  { "type":"function", "name":"owner", "inputs": [], "outputs":[{"type":"address"}], "stateMutability":"view" },
   {
     "type": "function",
     "name": "currentRoundId",
@@ -30,6 +31,8 @@ export const abi = [
   { "type":"function", "name":"priorWinnersCount", "inputs": [], "outputs":[{"type":"uint256"}], "stateMutability":"view" },
   { "type":"function", "name":"getWinnerAt", "inputs": [{"name":"index","type":"uint256"}], "outputs":[{"type":"tuple","components":[{"name":"roundId","type":"uint256"},{"name":"winner","type":"address"},{"name":"target","type":"uint32"},{"name":"prize","type":"uint256"}]}], "stateMutability":"view" },
   { "type":"function", "name":"submitGuess", "inputs": [{"name":"number","type":"uint32"}], "outputs": [], "stateMutability":"payable" },
+  { "type":"function", "name":"endAndSettle", "inputs": [], "outputs": [], "stateMutability":"nonpayable" },
+  { "type":"function", "name":"startNextRound", "inputs": [], "outputs": [], "stateMutability":"nonpayable" },
   { "type":"event", "name":"GuessSubmitted", "inputs": [
     {"name":"roundId","type":"uint256","indexed":true},
     {"name":"player","type":"address","indexed":true},

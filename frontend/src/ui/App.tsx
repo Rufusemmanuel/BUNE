@@ -21,6 +21,7 @@ export default function App() {
   const [winners, setWinners] = useState<any[]>([])
   const [now, setNow] = useState<number>(Math.floor(Date.now()/1000))
   const [simMsg, setSimMsg] = useState<string | null>(null)
+  const [owner, setOwner] = useState<string | null>(null)
   const rpcUrl = import.meta.env.VITE_RPC_URL as string
   const contract = getAddress(import.meta.env.VITE_CONTRACT_ADDRESS as string) as `0x${string}`
   const desiredChainId = Number(import.meta.env.VITE_CHAIN_ID || 84532)
@@ -54,6 +55,10 @@ export default function App() {
 
   useEffect(() => { (async () => {
     try {
+      try {
+        const o = await (client as any).readContract({ address: contract, abi: abi as any, functionName: 'owner' })
+        setOwner(o as string)
+      } catch {}
       const count = await (client as any).readContract({ address: contract, abi: abi as any, functionName: 'priorWinnersCount' }) as bigint
       const items: any[] = []
       const start = count > 10n ? count - 10n : 0n
@@ -65,11 +70,33 @@ export default function App() {
     } catch {}
   })() }, [client, contract, now])
 
+  async function endRound() {
+    try {
+      setError(null)
+      if (!address || !owner || address.toLowerCase() !== owner.toLowerCase()) {
+        throw new Error('Only owner can end/settle')
+      }
+      if (onMiniapp && typeof window !== 'undefined' && (window as any).ethereum?.request) {
+        const eth = (window as any).ethereum
+        const hexChain = '0x' + desiredChainId.toString(16)
+        try { await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hexChain }] }) } catch {}
+        const data = encodeFunctionData({ abi: abi as any, functionName: 'endAndSettle', args: [] })
+        const tx = { to: contract, data }
+        await eth.request({ method: 'eth_sendTransaction', params: [tx] })
+      } else {
+        await writeContractAsync({ address: contract, abi: abi as any, functionName: 'endAndSettle', args: [], chainId: desiredChainId } as any)
+      }
+      await refresh()
+    } catch (e:any) {
+      setError(e?.shortMessage || e?.message || String(e))
+    }
+  }
+
   async function submit() {
     if (!guess || guess < 1 || guess > 1000) { setError('Enter 1..1000'); return }
     try {
       setError(null)
-      // If running inside Farcaster miniapp (or any in‑app wallet), prefer direct EIP‑1193 send
+      // If running inside Farcaster miniapp (or any in-app wallet), prefer direct EIP-1193 send
       if (onMiniapp && typeof window !== 'undefined' && (window as any).ethereum?.request) {
         const eth = (window as any).ethereum
         // Ensure desired chain from env (Base mainnet 8453 or Sepolia 84532)
@@ -194,6 +221,11 @@ export default function App() {
             <div><div style={{opacity:0.7}}>Entry</div><strong>{formatEther(entryFee)} ETH</strong></div>
           </div>
           <div className="gr-countdown" style={{ marginTop: 12 }}>Countdown: {Math.floor(endsIn/60)}m {endsIn%60}s</div>
+          {isConnected && owner && address?.toLowerCase() === owner.toLowerCase() && endsIn === 0 && round.active && (
+            <div style={{marginTop:12}}>
+              <button className="gr-btn" onClick={endRound}>End + Settle (owner)</button>
+            </div>
+          )}
           {!onMiniapp && (
             <div className="gr-form" style={{ marginTop: 12 }}>
               <input className="gr-input" type="number" min={1} max={1000} value={guess||''} onChange={e=>setGuess(Number(e.target.value))} placeholder="Your guess (1..1000)" />
