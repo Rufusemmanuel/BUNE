@@ -1,0 +1,16 @@
+{
+  "name": "BUNE",
+  "short_name": "BUNE",
+  "description": "Guess the number, closest wins the pot on Base.",
+  "icons": [
+    { "src": "/icon.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "start_url": "/miniapp",
+  "display": "standalone",
+  "background_color": "#0d111c",
+  "theme_color": "#0d111c",
+  "intents": [
+    { "label": "Submit Guess", "action": "submit" },
+    { "label": "Refresh", "action": "refresh" }
+  ]
+}
