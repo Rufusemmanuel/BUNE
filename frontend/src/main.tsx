@@ -49,5 +49,18 @@ try {
     msgVariants.forEach((m) => {
       try { window.parent.postMessage(m, '*') } catch {}
     })
+
+    // Reply to potential handshake/ping messages from host
+    try {
+      window.addEventListener('message', (ev: MessageEvent) => {
+        const t = (ev?.data && (ev.data.type || ev.data.event || ev.data.action) || '').toString().toLowerCase()
+        if (t.includes('ready') || t.includes('init') || t.includes('ping') || t.includes('load')) {
+          msgVariants.forEach((m) => { try { window.parent.postMessage(m, '*') } catch {} })
+        }
+      })
+    } catch {}
+
+    // Send again after a short delay to catch late listeners
+    setTimeout(() => { msgVariants.forEach((m) => { try { window.parent.postMessage(m, '*') } catch {} }) }, 1000)
   }
 } catch {}
