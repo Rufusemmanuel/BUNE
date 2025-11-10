@@ -18,7 +18,7 @@
     "primaryCategory": "games",
     "subtitle": "Closest guess wins the pool",
     "tagline": "Guess. Win. On Base.",
-    "heroImageUrl": "https://placehold.co/1200x630/png?text=BUNE",
+    "heroImageUrl": "https://raw.githubusercontent.com/github/explore/main/topics/ethereum/ethereum.png",
     "screenshotUrls": [
       "https://placehold.co/800x600/png?text=BUNE+Screenshot"
     ],
@@ -27,7 +27,7 @@
     "tags": ["game", "base", "guess"],
     "ogTitle": "BUNE – Guessing Game on Base",
     "ogDescription": "Guess the number and win the pot on Base.",
-    "ogImageUrl": "https://placehold.co/1200x630/png?text=BUNE+OG"
+    "ogImageUrl": "https://raw.githubusercontent.com/github/explore/main/topics/ethereum/ethereum.png"
   },
   "frame": {
     "version": "1",
