@@ -20,6 +20,7 @@ export default function App() {
   const [guess, setGuess] = useState<number>(0)
   const [winners, setWinners] = useState<any[]>([])
   const [now, setNow] = useState<number>(Math.floor(Date.now()/1000))
+  const [simMsg, setSimMsg] = useState<string | null>(null)
   const rpcUrl = import.meta.env.VITE_RPC_URL as string
   const contract = getAddress(import.meta.env.VITE_CONTRACT_ADDRESS as string) as `0x${string}`
   const desiredChainId = Number(import.meta.env.VITE_CHAIN_ID || 84532)
@@ -76,6 +77,23 @@ export default function App() {
         try { await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hexChain }] }) } catch {}
         // Request accounts if needed
         try { await eth.request({ method: 'eth_requestAccounts' }) } catch {}
+        // Pre-simulate to show gas/success
+        try {
+          const accs = (await eth.request({ method: 'eth_accounts' })) as string[]
+          const from = accs && accs[0] as `0x${string}`
+          if (from) {
+            const sim: any = await (client as any).simulateContract({
+              account: from,
+              address: contract,
+              abi: abi as any,
+              functionName: 'submitGuess',
+              args: [guess],
+              value: entryFee
+            })
+            const req: any = sim?.request || {}
+            setSimMsg(`Simulation OK • estGas=${req.gas ? String(req.gas) : 'n/a'}`)
+          }
+        } catch {}
         const data = encodeFunctionData({ abi: abi as any, functionName: 'submitGuess', args: [guess] })
         const tx = {
           to: contract,
@@ -87,6 +105,22 @@ export default function App() {
         try { await (client as any).waitForTransactionReceipt?.({ hash }) } catch {}
       } else {
         // Fallback to wagmi/viem write
+        // Pre-simulate first; if it throws we surface the message and abort
+        try {
+          const sim: any = await (client as any).simulateContract({
+            account: address as any,
+            address: contract,
+            abi: abi as any,
+            functionName: 'submitGuess',
+            args: [guess],
+            value: entryFee
+          })
+          const req: any = sim?.request || {}
+          setSimMsg(`Simulation OK • estGas=${req.gas ? String(req.gas) : 'n/a'}`)
+        } catch (e:any) {
+          setError(e?.message || String(e))
+          return
+        }
         await writeContractAsync({ address: contract, abi: abi as any, functionName: 'submitGuess', args: [guess as any], value: entryFee, chainId: desiredChainId } as any)
       }
       await refresh()
@@ -147,6 +181,7 @@ export default function App() {
       )}
 
       {error && <div className="gr-alert" style={{ background: '#311', border: '1px solid #633', padding: 8, marginTop: 12 }}>{error}</div>}
+      {simMsg && <div className="gr-alert" style={{ background: '#113', border: '1px solid #336', padding: 8, marginTop: 12 }}>{simMsg}</div>}
 
       {round && (
         <section className="gr-card" style={{ marginTop: 16, border: '1px solid #2c2c2e', borderRadius: 12, padding: 16 }}>
