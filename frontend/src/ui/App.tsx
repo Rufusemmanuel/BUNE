@@ -78,11 +78,30 @@ export default function App() {
       }
       if (onMiniapp && typeof window !== 'undefined' && (window as any).ethereum?.request) {
         const eth = (window as any).ethereum
+        // Connect + ensure chain (with add chain fallback)
         try { await eth.request({ method: 'eth_requestAccounts' }) } catch {}
         const hexChain = '0x' + desiredChainId.toString(16)
-        try { await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hexChain }] }) } catch {}
+        try {
+          await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hexChain }] })
+        } catch (e:any) {
+          if (e && (e.code === 4902 || String(e.message||'').includes('Unrecognized chain'))) {
+            try {
+              await eth.request({ method: 'wallet_addEthereumChain', params: [{
+                chainId: hexChain,
+                chainName: desiredChainId === base.id ? 'Base' : 'Base Sepolia',
+                nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+                rpcUrls: [rpcUrl],
+                blockExplorerUrls: desiredChainId === base.id ? ['https://basescan.org'] : ['https://sepolia.basescan.org']
+              }] })
+            } catch {}
+          }
+        }
+        // Determine from
+        let from: string | undefined
+        try { const accs = await eth.request({ method: 'eth_accounts' }) as string[]; from = accs?.[0] } catch {}
         const data = encodeFunctionData({ abi: abi as any, functionName: 'endAndSettle', args: [] })
-        const tx = { to: contract, data }
+        const tx: any = { to: contract, data }
+        if (from) tx.from = from
         await eth.request({ method: 'eth_sendTransaction', params: [tx] })
       } else {
         await writeContractAsync({ address: contract, abi: abi as any, functionName: 'endAndSettle', args: [], chainId: desiredChainId } as any)
@@ -100,11 +119,24 @@ export default function App() {
       // If running inside Farcaster miniapp (or any in-app wallet), prefer direct EIP-1193 send
       if (onMiniapp && typeof window !== 'undefined' && (window as any).ethereum?.request) {
         const eth = (window as any).ethereum
-        // Ensure desired chain from env (Base mainnet 8453 or Sepolia 84532)
         const hexChain = '0x' + desiredChainId.toString(16)
-        try { await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hexChain }] }) } catch {}
-        // Request accounts if needed
+        // Connect + ensure chain (with add chain fallback)
         try { await eth.request({ method: 'eth_requestAccounts' }) } catch {}
+        try {
+          await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hexChain }] })
+        } catch (e:any) {
+          if (e && (e.code === 4902 || String(e.message||'').includes('Unrecognized chain'))) {
+            try {
+              await eth.request({ method: 'wallet_addEthereumChain', params: [{
+                chainId: hexChain,
+                chainName: desiredChainId === base.id ? 'Base' : 'Base Sepolia',
+                nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+                rpcUrls: [rpcUrl],
+                blockExplorerUrls: desiredChainId === base.id ? ['https://basescan.org'] : ['https://sepolia.basescan.org']
+              }] })
+            } catch {}
+          }
+        }
         // Pre-simulate to show gas/success
         try {
           const accs = (await eth.request({ method: 'eth_accounts' })) as string[]
@@ -123,11 +155,10 @@ export default function App() {
           }
         } catch {}
         const data = encodeFunctionData({ abi: abi as any, functionName: 'submitGuess', args: [guess] })
-        const tx = {
-          to: contract,
-          data,
-          value: toHex(entryFee)
-        }
+        const accounts = (await eth.request({ method: 'eth_accounts' })) as string[]
+        const from = accounts?.[0]
+        const tx: any = { to: contract, data, value: toHex(entryFee) }
+        if (from) tx.from = from
         const hash = await eth.request({ method: 'eth_sendTransaction', params: [tx] })
         // Optionally wait via public client
         try { await (client as any).waitForTransactionReceipt?.({ hash }) } catch {}
