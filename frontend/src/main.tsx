@@ -37,7 +37,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>
 )
 
-// Signal readiness to Base Miniapp preview if embedded
+// Signal readiness to Farcaster/Base Mini App hosts so splash hides
 try {
   if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
     const msgVariants = [
@@ -49,33 +49,44 @@ try {
       { type: 'sdk.actions.ready' },
       { type: 'actions.ready' }
     ]
-    msgVariants.forEach((m) => {
-      try { window.parent.postMessage(m, '*') } catch {}
-    })
+    const signal = () => {
+      if ((window as any).__miniappReadySignalled) return
+      ;(window as any).__miniappReadySignalled = true
+      msgVariants.forEach((m) => { try { window.parent.postMessage(m, '*') } catch {} })
+      try {
+        const g: any = (window as any)
+        if (g.sdk && g.sdk.actions && typeof g.sdk.actions.ready === 'function') g.sdk.actions.ready()
+        if (g.actions && typeof g.actions.ready === 'function') g.actions.ready()
+      } catch {}
+    }
+
+    // Initial attempt right after mount
+    signal()
 
     // Reply to potential handshake/ping messages from host
     try {
       window.addEventListener('message', (ev: MessageEvent) => {
         const t = (ev?.data && (ev.data.type || ev.data.event || ev.data.action) || '').toString().toLowerCase()
-        if (t.includes('ready') || t.includes('init') || t.includes('ping') || t.includes('load')) {
-          msgVariants.forEach((m) => { try { window.parent.postMessage(m, '*') } catch {} })
-        }
+        if (t.includes('ready') || t.includes('init') || t.includes('ping') || t.includes('load') || t.includes('miniapp')) signal()
       })
     } catch {}
 
-    // If the Farcaster Miniapp SDK is injected, call its ready() hook
-    try {
-      // Common globals used by clients/embeds
-      const g: any = (window as any)
-      if (g.sdk && g.sdk.actions && typeof g.sdk.actions.ready === 'function') {
-        g.sdk.actions.ready()
-      } else if (g.actions && typeof g.actions.ready === 'function') {
-        g.actions.ready()
-      }
-    } catch {}
-
-    // Send again after a short delay to catch late listeners
-    setTimeout(() => { msgVariants.forEach((m) => { try { window.parent.postMessage(m, '*') } catch {} }) }, 300)
-    setTimeout(() => { msgVariants.forEach((m) => { try { window.parent.postMessage(m, '*') } catch {} }) }, 1000)
+    // Poll for SDK injection for a few seconds and call when available
+    let tries = 0
+    const iv = setInterval(() => {
+      tries += 1
+      try {
+        const g: any = (window as any)
+        if (g.sdk && g.sdk.actions && typeof g.sdk.actions.ready === 'function') {
+          g.sdk.actions.ready(); signal(); clearInterval(iv)
+        } else if (g.actions && typeof g.actions.ready === 'function') {
+          g.actions.ready(); signal(); clearInterval(iv)
+        } else {
+          // re-signal via postMessage until SDK listens
+          msgVariants.forEach((m) => { try { window.parent.postMessage(m, '*') } catch {} })
+        }
+      } catch {}
+      if (tries > 20) clearInterval(iv)
+    }, 250)
   }
 } catch {}
