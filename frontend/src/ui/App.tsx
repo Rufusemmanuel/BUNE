@@ -8,7 +8,8 @@ const truncate = (a?: string) => a ? `${a.slice(0,6)}…${a.slice(-4)}` : ''
 
 export default function App() {
   const { connectors, connect, status: connStatus } = useConnect()
-  const { isConnected, address, chainId } = useAccount()\n  const [manualAddress, setManualAddress] = useState<string | null>(null)
+  const { isConnected, address, chainId } = useAccount()
+  const [manualAddress, setManualAddress] = useState<string | null>(null)
   const { disconnect } = useDisconnect()
   const { writeContractAsync, status: writeStatus } = useWriteContract()
   const { switchChainAsync } = useSwitchChain()
@@ -210,7 +211,25 @@ export default function App() {
     }
   }
 
-  async function connectPreferred() {\n    try {\n      const eth = farcasterProvider() as any\n      if (onMiniapp && eth) {\n        try { const accs = await eth.request?.({ method: 'eth_requestAccounts' }) as string[]; if (accs && accs[0]) setManualAddress(accs[0]) } catch {}\n      }\n      const preferred = connectors.find((c:any) => c.id === 'injected' || /Injected/i.test(c.name)) || connectors[0]\n      if (!preferred) throw new Error('No wallet connector available')\n      try { await disconnect() } catch {}\n      try { await connect({ connector: preferred }) } catch (e:any) { try { await disconnect() } catch {}; await connect({ connector: preferred }) }\n      const hex = '0x' + desiredChainId.toString(16)\n      try { await switchChainAsync?.({ chainId: desiredChainId }) } catch {}\n      if (onMiniapp && eth) {\n        try { await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] }) } catch (e:any) { if (e && (e.code === 4902 || String(e.message||'').includes('Unrecognized chain'))) { try { await eth.request({ method: 'wallet_addEthereumChain', params: [{ chainId: hex, chainName: desiredChainId === base.id ? 'Base' : 'Base Sepolia', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: [rpcUrl], blockExplorerUrls: desiredChainId === base.id ? ['https://basescan.org'] : ['https://sepolia.basescan.org'] }] }) } catch {} } }\n      }\n      setError(null)\n    } catch (e:any) { setError(e?.message || String(e)) }\n  }
+  async function connectPreferred() {
+    try {
+      const eth = farcasterProvider() as any
+      if (onMiniapp && eth) {
+        try { const accs = await eth.request?.({ method: 'eth_requestAccounts' }) as string[]; if (accs && accs[0]) setManualAddress(accs[0]) } catch {}
+      }
+      const preferred = connectors.find((c:any) => c.id === 'injected' || /Injected/i.test(c.name)) || connectors[0]
+      if (!preferred) throw new Error('No wallet connector available')
+      try { await disconnect() } catch {}
+      try { await connect({ connector: preferred }) } catch (e:any) { try { await disconnect() } catch {}; await connect({ connector: preferred }) }
+      const hex = '0x' + desiredChainId.toString(16)
+      try { await switchChainAsync?.({ chainId: desiredChainId }) } catch {}
+      if (onMiniapp && eth) {
+        try { await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] }) } catch (e:any) { if (e && (e.code === 4902 || String(e.message||'').includes('Unrecognized chain'))) { try { await eth.request({ method: 'wallet_addEthereumChain', params: [{ chainId: hex, chainName: desiredChainId === base.id ? 'Base' : 'Base Sepolia', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: [rpcUrl], blockExplorerUrls: desiredChainId === base.id ? ['https://basescan.org'] : ['https://sepolia.basescan.org'] }] }) } catch {} } }
+      }
+      setError(null)
+    } catch (e:any) { setError(e?.message || String(e)) }
+  }
+
 
 
 
