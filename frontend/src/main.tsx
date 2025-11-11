@@ -1,7 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { WagmiProvider, http, createConfig } from 'wagmi'
-// Attempt to dynamically import the official SDK in browser contexts (iOS compatible)\nlet fcSdk: any = null as any\ntry {\n  if (typeof window !== 'undefined') {\n    import('@farcaster/miniapp-sdk')\n      .then((m: any) => { fcSdk = m?.sdk || null; try { fcSdk?.actions?.ready?.() } catch {} })\n      .catch(() => {})\n  }\n} catch {}\nimport { base, baseSepolia } from 'viem/chains'
+import { base, baseSepolia } from 'viem/chains'
 import type { Chain } from 'viem/chains'
 import { injected } from 'wagmi/connectors'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -69,7 +68,6 @@ try {
     const callAllReadyVariants = () => {
       try {
         const g: any = (window as any)
-        if (fcSdk?.actions?.ready) fcSdk.actions.ready()
         if (g.sdk?.actions?.ready) g.sdk.actions.ready()
         if (g.actions?.ready) g.actions.ready()
         if (g.farcaster?.actions?.ready) g.farcaster.actions.ready()
@@ -91,43 +89,33 @@ try {
       callAllReadyVariants()
     }
 
-  // Initial attempt right after mount
-  signal()
-  // Try imported SDK immediately for iOS
-  try { if (fcSdk?.actions?.ready) fcSdk.actions.ready() } catch {}
+    // Initial attempt right after mount
+    signal()
 
-  // If SDK not present, inject it per docs and call ready on load
-  try {
-    const g: any = (window as any)
-    const hasSdk = !!(g.sdk && g.sdk.actions && typeof g.sdk.actions.ready === 'function') ||
-                   !!(g.actions && typeof g.actions.ready === 'function')
-    if (!hasSdk) {
-      const existing = document.querySelector('script[data-miniapps-sdk]') as HTMLScriptElement | null
-      if (!existing) {
-        const s = document.createElement('script')
-        s.src = 'https://miniapps.farcaster.xyz/sdk.js'
-        s.async = true
-        s.crossOrigin = 'anonymous'
-        s.setAttribute('data-miniapps-sdk', '1')
-        s.onload = () => {
-          try {
-            const gg: any = (window as any)
-            if (gg.sdk?.actions?.ready) gg.sdk.actions.ready()
-            if (gg.actions?.ready) gg.actions.ready()
-            signal()
-          } catch {}
-        }
-        document.head.appendChild(s)
-      }
-    }
-  } catch {}
-
-  // Reply to potential handshake/ping messages from host
+    // If SDK not present, inject it per docs and call ready on load
     try {
-      window.addEventListener('message', (ev: MessageEvent) => {
-        const t = (ev?.data && (ev.data.type || ev.data.event || ev.data.action) || '').toString().toLowerCase()
-        if (t.includes('ready') || t.includes('init') || t.includes('ping') || t.includes('load') || t.includes('miniapp')) signal()
-      })
+      const g: any = (window as any)
+      const hasSdk = !!(g.sdk && g.sdk.actions && typeof g.sdk.actions.ready === 'function') ||
+                     !!(g.actions && typeof g.actions.ready === 'function')
+      if (!hasSdk) {
+        const existing = document.querySelector('script[data-miniapps-sdk]') as HTMLScriptElement | null
+        if (!existing) {
+          const s = document.createElement('script')
+          s.src = 'https://miniapps.farcaster.xyz/sdk.js'
+          s.async = true
+          s.crossOrigin = 'anonymous'
+          s.setAttribute('data-miniapps-sdk', '1')
+          s.onload = () => {
+            try {
+              const gg: any = (window as any)
+              if (gg.sdk?.actions?.ready) gg.sdk.actions.ready()
+              if (gg.actions?.ready) gg.actions.ready()
+              signal()
+            } catch {}
+          }
+          document.head.appendChild(s)
+        }
+      }
     } catch {}
 
     // Poll for SDK injection for a few seconds and call when available
@@ -162,4 +150,5 @@ try {
     try { window.addEventListener('load', () => { callAllReadyVariants(); signal() }) } catch {}
   }
 } catch {}
+
 
