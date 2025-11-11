@@ -8,7 +8,7 @@ const truncate = (a?: string) => a ? `${a.slice(0,6)}…${a.slice(-4)}` : ''
 
 export default function App() {
   const { connectors, connect, status: connStatus } = useConnect()
-  const { isConnected, address, chainId } = useAccount()
+  const { isConnected, address, chainId } = useAccount()\n  const [manualAddress, setManualAddress] = useState<string | null>(null)
   const { disconnect } = useDisconnect()
   const { writeContractAsync, status: writeStatus } = useWriteContract()
   const { switchChainAsync } = useSwitchChain()
@@ -210,94 +210,11 @@ export default function App() {
     }
   }
 
-  async function connectPreferred() {
-    try {
-      const preferred = connectors.find(c => c.name === 'Injected') || connectors[0]
-      if (!preferred) throw new Error('No wallet connector available')
-      await connect({ connector: preferred })
-      try { await switchChainAsync?.({ chainId: desiredChainId }) } catch {}
-    } catch (e:any) { setError(e?.message || String(e)) }
-  }
+  async function connectPreferred() {\n    try {\n      const eth = farcasterProvider() as any\n      if (onMiniapp && eth) {\n        try { const accs = await eth.request?.({ method: 'eth_requestAccounts' }) as string[]; if (accs && accs[0]) setManualAddress(accs[0]) } catch {}\n      }\n      const preferred = connectors.find((c:any) => c.id === 'injected' || /Injected/i.test(c.name)) || connectors[0]\n      if (!preferred) throw new Error('No wallet connector available')\n      try { await disconnect() } catch {}\n      try { await connect({ connector: preferred }) } catch (e:any) { try { await disconnect() } catch {}; await connect({ connector: preferred }) }\n      const hex = '0x' + desiredChainId.toString(16)\n      try { await switchChainAsync?.({ chainId: desiredChainId }) } catch {}\n      if (onMiniapp && eth) {\n        try { await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] }) } catch (e:any) { if (e && (e.code === 4902 || String(e.message||'').includes('Unrecognized chain'))) { try { await eth.request({ method: 'wallet_addEthereumChain', params: [{ chainId: hex, chainName: desiredChainId === base.id ? 'Base' : 'Base Sepolia', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: [rpcUrl], blockExplorerUrls: desiredChainId === base.id ? ['https://basescan.org'] : ['https://sepolia.basescan.org'] }] }) } catch {} } }\n      }\n      setError(null)\n    } catch (e:any) { setError(e?.message || String(e)) }\n  }
 
-  return (
-    <div className="gr-app" style={{ padding: 16 }}>
-      <header className="gr-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 className="gr-title" style={{ margin: 0 }}>BUNE</h2>
-        <div className="gr-connect">
-          {isConnected ? (
-            <button className="gr-btn gr-btn-ghost" onClick={() => disconnect()} title={address || ''} style={{ padding: '6px 10px' }}>{truncate(address)}</button>
-          ) : (
-            <button className="gr-btn" onClick={connectPreferred} style={{ padding: '6px 10px', marginLeft: 8 }}>
-              {onMiniapp ? 'Farcaster Wallet' : 'Browser Wallet'}
-            </button>
-          )}
-        </div>
-      </header>
 
-      {mismatch && (
-        <div className="gr-alert" style={{ marginTop: 12 }}>
-          The current wallet chain ({chainId}) does not match the app target ({desiredChainId}).
-          <div style={{ marginTop: 8 }}>
-            <button className="gr-btn" onClick={switchToDesired}>Switch to Base</button>
-          </div>
-        </div>
-      )}
 
-      {error && <div className="gr-alert" style={{ background: '#311', border: '1px solid #633', padding: 8, marginTop: 12 }}>{error}</div>}
-      {simMsg && <div className="gr-alert" style={{ background: '#113', border: '1px solid #336', padding: 8, marginTop: 12 }}>{simMsg}</div>}
 
-      {round && (
-        <section className="gr-card" style={{ marginTop: 16, border: '1px solid #2c2c2e', borderRadius: 12, padding: 16 }}>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            <div><div style={{opacity:0.7}}>Round</div><strong>#{String(roundId)}</strong></div>
-            <div><div style={{opacity:0.7}}>Active</div><strong>{round.active ? 'Yes' : 'No'}</strong></div>
-            <div><div style={{opacity:0.7}}>Ends</div><strong>{new Date(Number(round.endTime)*1000).toLocaleString()}</strong></div>
-            <div><div style={{opacity:0.7}}>Pot</div><strong>{formatEther(round.pot)} ETH</strong></div>
-            <div><div style={{opacity:0.7}}>Guesses</div><strong>{String(round.guessesCount)}</strong></div>
-            <div><div style={{opacity:0.7}}>Entry</div><strong>{formatEther(entryFee)} ETH</strong></div>
-          </div>
-          <div className="gr-countdown" style={{ marginTop: 12 }}>Countdown: {Math.floor(endsIn/60)}m {endsIn%60}s</div>
-          {isConnected && owner && address?.toLowerCase() === owner.toLowerCase() && endsIn === 0 && round.active && (
-            <div style={{marginTop:12}}>
-              <button className="gr-btn" onClick={endRound}>End + Settle (owner)</button>
-            </div>
-          )}
-          {round.active && endsIn > 0 && (
-            <div className="gr-form" style={{ marginTop: 12 }}>
-              <input className="gr-input" type="number" min={1} max={1000} value={guess||''} onChange={e=>setGuess(Number(e.target.value))} placeholder="Your guess (1..1000)" />
-              <button className="gr-btn" onClick={submit} disabled={!round?.active || endsIn===0} style={{ marginLeft: 8, padding: '8px 12px', opacity: (!round?.active || endsIn===0) ? 0.6 : 1 }}>Submit Guess</button>
-            </div>
-          )}
-          {(endsIn === 0 || !round.active) && (!owner || address?.toLowerCase() !== owner.toLowerCase()) && (
-            <div className="gr-alert" style={{ marginTop: 12 }}>
-              Round ended. Waiting for owner to settle…
-            </div>
-          )}
-        </section>
-      )}
-
-      <section className="gr-section" style={{ marginTop: 16 }}>
-        <div className="gr-section-head"><h3>Live Activity</h3><button className="gr-btn gr-btn-ghost" onClick={refresh} style={{ padding: '6px 10px' }}>Refresh</button></div>
-        <ul className="gr-list">
-          {guesses.slice().reverse().slice(0, 20).map((g, i) => (
-            <li key={i} className="gr-list-item"><span className="gr-tag">{truncate(g.player)}</span> guessed <strong>{g.number}</strong> at {new Date(Number(g.timestamp)*1000).toLocaleTimeString()}</li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="gr-section" style={{ marginTop: 16 }}>
-        <h3>History (latest)</h3>
-        {winners.length === 0 ? <p>No winners yet.</p> : (
-          <ul className="gr-list">
-            {winners.map((w, idx) => (
-              <li key={idx} className="gr-list-item">Round #{String(w.roundId)} — Winner {truncate(w.winner)} — Target {String(w.target)} — Prize {formatEther(w.prize)} ETH</li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
-  )
-}
 
 
 
