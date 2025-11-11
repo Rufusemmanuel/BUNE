@@ -1,5 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { sdk as farcasterSdk } from '@farcaster/miniapp-sdk'
 import { WagmiProvider, http, createConfig } from 'wagmi'
 import { base, baseSepolia } from 'viem/chains'
 import type { Chain } from 'viem/chains'
@@ -16,6 +17,8 @@ try {
   } else if (g && g.actions && g.actions.ethereum && !g.ethereum) {
     g.ethereum = g.actions.ethereum
   }
+  // Prefer provider exposed by the imported SDK when available
+  try { if (!g.ethereum && (farcasterSdk as any)?.ethereum) g.ethereum = (farcasterSdk as any).ethereum } catch {}
 } catch {}
 
 const chainId = Number(import.meta.env.VITE_CHAIN_ID || 84532)
@@ -69,6 +72,8 @@ try {
     const callAllReadyVariants = () => {
       try {
         const g: any = (window as any)
+        // Call the imported SDK's ready first (recommended)
+        try { (farcasterSdk as any)?.actions?.ready?.() } catch {}
         if (g.sdk?.actions?.ready) g.sdk.actions.ready()
         if (g.actions?.ready) g.actions.ready()
         if (g.farcaster?.actions?.ready) g.farcaster.actions.ready()
@@ -92,6 +97,8 @@ try {
 
     // Initial attempt right after mount
     signal()
+    // Also call imported SDK ready explicitly
+    try { (farcasterSdk as any)?.actions?.ready?.() } catch {}
 
     // If SDK not present, inject it per docs and call ready on load
     try {
