@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BUNE Mini App – Embed</title>
+    <style>
+      html, body { height: 100%; margin: 0; background: #0b0b0c; color: #eaeaea; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Arial, sans-serif; }
+      .wrap { display: grid; place-items: center; height: 100%; padding: 16px; box-sizing: border-box; }
+      .frame { width: min(420px, 100%); height: min(800px, 100%); border: 0; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,.4); background: #111; }
+      .hint { position: fixed; left: 12px; bottom: 12px; opacity: .7; font-size: 12px; }
+      a { color: #7cc7ff; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <iframe id="miniapp-frame" class="frame"
+        allow="clipboard-read; clipboard-write; geolocation *; camera *; microphone *; autoplay *; payment *"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads"
+        title="BUNE Mini App"></iframe>
+    </div>
+    <div class="hint">
+      Embed loads Farcaster preview. Open directly: <a id="direct" target="_blank" rel="noopener">miniapp link</a>
+    </div>
+    <script>
+      (function () {
+        const params = new URLSearchParams(location.search)
+        const target = params.get('url') || 'https://bune-again.vercel.app/miniapp'
+        const encoded = encodeURIComponent(target)
+        const preview = `https://farcaster.xyz/~/developers/mini-apps/preview?url=${encoded}`
+        document.getElementById('miniapp-frame').src = preview
+        const a = document.getElementById('direct'); a.href = target; a.textContent = target
+      })()
+    </script>
+  </body>
+  </html>
+
