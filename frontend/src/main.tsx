@@ -44,7 +44,10 @@ try {
       { type: 'miniapp.ready' },
       { type: 'miniapp_ready' },
       { type: 'base.miniapp.ready' },
-      { type: 'ready' }
+      { type: 'ready' },
+      // Farcaster Mini Apps SDK compatibility
+      { type: 'sdk.actions.ready' },
+      { type: 'actions.ready' }
     ]
     msgVariants.forEach((m) => {
       try { window.parent.postMessage(m, '*') } catch {}
@@ -60,7 +63,19 @@ try {
       })
     } catch {}
 
+    // If the Farcaster Miniapp SDK is injected, call its ready() hook
+    try {
+      // Common globals used by clients/embeds
+      const g: any = (window as any)
+      if (g.sdk && g.sdk.actions && typeof g.sdk.actions.ready === 'function') {
+        g.sdk.actions.ready()
+      } else if (g.actions && typeof g.actions.ready === 'function') {
+        g.actions.ready()
+      }
+    } catch {}
+
     // Send again after a short delay to catch late listeners
+    setTimeout(() => { msgVariants.forEach((m) => { try { window.parent.postMessage(m, '*') } catch {} }) }, 300)
     setTimeout(() => { msgVariants.forEach((m) => { try { window.parent.postMessage(m, '*') } catch {} }) }, 1000)
   }
 } catch {}
