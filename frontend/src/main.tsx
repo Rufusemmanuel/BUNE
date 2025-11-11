@@ -32,10 +32,7 @@ const config = createConfig({
     [baseSepolia.id]: http(rpcUrl)
   },
   ssr: false,
-  syncConnectedChain: true,
-  // Attempt to auto-connect when running inside a miniapp host
-  // (wagmi v2 sets this via storage, but we want a gentle default here)
-  multiInjectedProviderDiscovery: true
+  syncConnectedChain: true
 })
 
 const qc = new QueryClient()
