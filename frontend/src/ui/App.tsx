@@ -239,3 +239,36 @@ export default function App() {
 
 
 
+
+  return (
+    <div className="gr-app" style={{ padding: 16 }}>
+      <header className="gr-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 style={{ margin: 0 }}>BUNE</h2>
+        <div className="gr-connect">
+          {(isConnected || !!manualAddress) ? (
+            <button className="gr-btn gr-btn-ghost" onClick={() => { try { disconnect() } catch {}; setManualAddress(null) }} title={(manualAddress || address) || ''} style={{ padding: '6px 10px' }}>{truncate((manualAddress || address) || '')}</button>
+          ) : (
+            <button className="gr-btn" onClick={connectPreferred} style={{ padding: '6px 10px', marginLeft: 8 }}>
+              {onMiniapp ? 'Farcaster Wallet' : 'Browser Wallet'}
+            </button>
+          )}
+        </div>
+      </header>
+
+      {mismatch && (
+        <div className="gr-alert" style={{ marginTop: 12 }}>
+          The current wallet chain ({chainId}) does not match the app target ({desiredChainId}).
+          <div style={{ marginTop: 8 }}>
+            <button className="gr-btn" onClick={switchToDesired}>Switch to Base</button>
+          </div>
+        </div>
+      )}
+
+      {error && <div className="gr-alert" style={{ background: '#311', border: '1px solid #633', padding: 8, marginTop: 12 }}>{error}</div>}
+
+      <div style={{ marginTop: 12 }}>
+        <button className="gr-btn gr-btn-ghost" onClick={refresh} style={{ padding: '6px 10px' }}>Refresh</button>
+      </div>
+    </div>
+  )
+}
