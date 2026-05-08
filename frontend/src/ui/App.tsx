@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from 'wagmi'
-import { useSendCalls } from 'wagmi/experimental'
-import { createPublicClient, formatEther, http, encodeFunctionData, toHex, getAddress } from 'viem'
+import { createPublicClient, formatEther, http, encodeFunctionData, getAddress } from 'viem'
 import { base } from 'viem/chains'
 import { abi } from '../abi'
-import { appendBuilderCodeSuffix, sendCallsCapabilities } from '../lib/builderCode'
+import { useBuilderSendCalls } from '../lib/builderHooks'
 import { detectMiniApp } from '../lib/miniappEnv'
 
 const truncate = (a?: string) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '')
@@ -21,7 +20,7 @@ export default function App() {
   const activeConnector = account.connector as any
   const { disconnect } = useDisconnect()
   const { switchChainAsync } = useSwitchChain()
-  const sendCalls = useSendCalls() as any
+  const sendCalls = useBuilderSendCalls() as any
   const sendCallsAsync = sendCalls.sendCallsAsync as any
   const [error, setError] = useState<string | null>(null)
   const [round, setRound] = useState<any>(null)
@@ -31,7 +30,6 @@ export default function App() {
   const [guess, setGuess] = useState<number>(0)
   const [winners, setWinners] = useState<any[]>([])
   const [now, setNow] = useState<number>(Math.floor(Date.now()/1000))
-  const [simMsg, setSimMsg] = useState<string | null>(null)
   const [owner, setOwner] = useState<string | null>(null)
   const [isMiniApp, setIsMiniApp] = useState<boolean | null>(null)
   const [autoConnectDone, setAutoConnectDone] = useState(false)
@@ -40,71 +38,8 @@ export default function App() {
   const desiredChainId = base.id
   const desiredChain = base
   const client = useMemo(() => createPublicClient({ chain: desiredChain, transport: http(rpcUrl) }), [rpcUrl])
-  const desiredChainHex = '0x' + desiredChainId.toString(16)
-
-  const isFarcasterWallet =
-    Boolean(isMiniApp) &&
-    Boolean(activeConnector) &&
-    (String((activeConnector as any).type || '').toLowerCase().includes('farcaster') ||
-      String((activeConnector as any).name || '').toLowerCase().includes('farcaster'))
-
-  const sendWithBuilderCode = async (calls: { to: `0x${string}`; data?: `0x${string}`; value?: bigint }[]) => {
-    const callsWithSuffix = calls.map((c) => ({
-      ...c,
-      data: appendBuilderCodeSuffix((c.data || '0x') as `0x${string}`),
-    }))
-    try {
-      if (isFarcasterWallet) {
-        await sendCallsAsync({ calls: callsWithSuffix, chainId: desiredChainId })
-        return
-      }
-      await sendCallsAsync({ calls: callsWithSuffix, chainId: desiredChainId })
-      return
-    } catch (e) {
-      // Use the active connector provider first; avoid window.ethereum in mini app.
-      const provider = (activeConnector as any)?.getProvider ? await (activeConnector as any).getProvider() : null
-      if (!provider) throw new Error('No provider available from the connected wallet')
-
-      const payloadCalls = callsWithSuffix.map((c) => ({
-        to: c.to,
-        data: c.data,
-        ...(c.value !== undefined ? { value: toHex(c.value) } : {})
-      }))
-
-      try {
-        await provider.request({
-          method: 'wallet_sendCalls',
-          params: [{
-            chainId: desiredChainHex,
-            from: address,
-            calls: payloadCalls,
-          }]
-        })
-        return
-      } catch (e2: any) {
-        // Only use eth_sendTransaction fallback outside mini app or when wallet_sendCalls unsupported.
-        if (isMiniApp) throw new Error(e2?.message || String(e2))
-
-        try {
-          const first = calls[0]
-          if (!first) throw e2
-          const txData = appendBuilderCodeSuffix((first.data || '0x') as `0x${string}`)
-          await provider.request({
-            method: 'eth_sendTransaction',
-            params: [{
-              to: first.to,
-              data: txData,
-              from: address as any,
-              ...(first.value !== undefined ? { value: toHex(first.value) } : {})
-            }]
-          })
-          return
-        } catch (e3: any) {
-          throw new Error(e3?.message || e2?.message || String(e3 || e2))
-        }
-      }
-    }
-  }
+  const sendWithBuilderCode = async (calls: { to: `0x${string}`; data?: `0x${string}`; value?: bigint }[]) =>
+    sendCallsAsync({ calls, chainId: desiredChainId, from: address })
 
   async function refresh() {
     try {
@@ -168,7 +103,7 @@ export default function App() {
       setError(null)
       // Pre-simulate first; if it throws we surface the message and abort
       try {
-        const sim: any = await (client as any).simulateContract({
+        await (client as any).simulateContract({
           account: address as any,
           address: contract,
           abi: abi as any,
@@ -176,8 +111,6 @@ export default function App() {
           args: [guess],
           value: entryFee
         })
-        const req: any = sim?.request || {}
-        setSimMsg(null) // Successful sim; keep UI clean
       } catch (e:any) {
         setError(e?.message || String(e))
         return

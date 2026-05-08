@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { createPublicClient, formatEther, http, parseAbi, readContract } from "viem";
-import { useAccount, useConnect, useWriteContract, useChainId, useSwitchChain } from "wagmi";
+import { createPublicClient, formatEther, http, parseAbi } from "viem";
+import { useAccount, useConnect, useChainId, useSwitchChain } from "wagmi";
 import { CHAIN } from "../lib/wagmi";
+import { useBuilderWriteContract } from "../lib/builderHooks";
 
 const abi = parseAbi([
   "function currentRoundId() view returns (uint256)",
@@ -14,29 +15,39 @@ const abi = parseAbi([
 ]);
 
 export default function Page() {
-  const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL!;
+  const rpcUrl =
+    process.env.NEXT_PUBLIC_BASE_RPC_URL ||
+    process.env.NEXT_PUBLIC_RPC_URL ||
+    "https://mainnet.base.org";
   const contract = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as `0x${string}`;
   const client = useMemo(() => createPublicClient({ transport: http(rpcUrl) }), [rpcUrl]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
   const [roundId, setRoundId] = useState<bigint>(0n);
   const [entryFee, setEntryFee] = useState<bigint>(0n);
   const [round, setRound] = useState<any>(null);
   const [guess, setGuess] = useState<number>(0);
   const { address, isConnected } = useAccount();
   const { connectors, connect, status: connectStatus, error: connectError } = useConnect();
-  const { writeContractAsync, status: writeStatus, error: writeError } = useWriteContract();
+  const { writeContractAsync, status: writeStatus, error: writeError } = useBuilderWriteContract();
   const activeChainId = useChainId();
   const { switchChain, isPending: switchPending, error: switchError } = useSwitchChain();
 
   async function refresh() {
     try {
       setLoading(true);
+      if (!contract) {
+        setError("Missing contract address env var (NEXT_PUBLIC_CONTRACT_ADDRESS). Add it to .env.local.");
+        setRound(null);
+        setLoading(false);
+        return;
+      }
       const [rid, fee, r] = await Promise.all([
-        readContract(client, { address: contract, abi, functionName: "currentRoundId" }),
-        readContract(client, { address: contract, abi, functionName: "entryFeeWei" }),
-        readContract(client, { address: contract, abi, functionName: "currentRound" })
+        client.readContract({ address: contract, abi, functionName: "currentRoundId" }),
+        client.readContract({ address: contract, abi, functionName: "entryFeeWei" }),
+        client.readContract({ address: contract, abi, functionName: "currentRound" })
       ]);
       setRoundId(rid as bigint);
       setEntryFee(fee as bigint);
@@ -54,6 +65,10 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   async function handleConnect() {
     try {
       const c = connectors?.[0];
@@ -68,6 +83,7 @@ export default function Page() {
     try {
       setError(null);
       if (!isConnected) throw new Error("Connect wallet inside the Mini App first.");
+      if (!contract) throw new Error("Missing contract address env var (NEXT_PUBLIC_CONTRACT_ADDRESS). Add it to .env.local.");
       if (!guess || guess < 1 || guess > 1000) throw new Error("Enter a number from 1 to 1000.");
       await writeContractAsync({
         address: contract,
@@ -103,23 +119,29 @@ export default function Page() {
       <p>Guess a number between 1 and 1000. Closest wins.</p>
 
       {error && <div style={{ color: '#ff6b6b' }}>Error: {error}</div>}
-      {loading && <div>Loading…</div>}
+      {loading && <div>Loading...</div>}
 
       <section style={{ marginTop: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
-        {!isConnected ? (
-          <button onClick={handleConnect} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #2c2c2e', background: '#1c1c1e', color: '#fff' }}>
-            {connectStatus === 'pending' ? 'Connecting…' : 'Connect Wallet'}
-          </button>
+        {!mounted ? (
+          <div style={{ fontSize: 12, opacity: 0.7 }}>Loading wallet status...</div>
         ) : (
-          <div style={{ fontSize: 12, opacity: 0.8 }}>Connected: {address}</div>
+          <>
+            {!isConnected ? (
+              <button onClick={handleConnect} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #2c2c2e', background: '#1c1c1e', color: '#fff' }}>
+                {connectStatus === 'pending' ? 'Connecting...' : 'Connect Wallet'}
+              </button>
+            ) : (
+              <div style={{ fontSize: 12, opacity: 0.8 }}>Connected: {address}</div>
+            )}
+            {connectError && <div style={{ color: '#ff6b6b', fontSize: 12 }}>{String((connectError as any)?.message || connectError)}</div>}
+            {isConnected && activeChainId !== CHAIN.id && (
+              <button onClick={() => switchChain({ chainId: CHAIN.id })} disabled={switchPending} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #2c2c2e', background: '#2a1f00', color: '#ffd36a' }}>
+                {switchPending ? 'Switching...' : `Switch to ${CHAIN.name}`}
+              </button>
+            )}
+            {switchError && <div style={{ color: '#ff6b6b', fontSize: 12 }}>{String((switchError as any)?.message || switchError)}</div>}
+          </>
         )}
-        {connectError && <div style={{ color: '#ff6b6b', fontSize: 12 }}>{String((connectError as any)?.message || connectError)}</div>}
-        {isConnected && activeChainId !== CHAIN.id && (
-          <button onClick={() => switchChain({ chainId: CHAIN.id })} disabled={switchPending} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #2c2c2e', background: '#2a1f00', color: '#ffd36a' }}>
-            {switchPending ? 'Switching…' : `Switch to ${CHAIN.name}`}
-          </button>
-        )}
-        {switchError && <div style={{ color: '#ff6b6b', fontSize: 12 }}>{String((switchError as any)?.message || switchError)}</div>}
       </section>
 
       {round && (
@@ -166,7 +188,7 @@ export default function Page() {
             </div>
             <div style={{ marginTop: 8 }}>
               <button onClick={handleSubmitGuess} disabled={!isConnected || writeStatus === 'pending'} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #2c2c2e', background: '#1c1c1e', color: '#fff' }}>
-                {writeStatus === 'pending' ? 'Submitting…' : 'Submit Guess'}
+                {writeStatus === 'pending' ? 'Submitting...' : 'Submit Guess'}
               </button>
               {writeError && <div style={{ color: '#ff6b6b', marginTop: 6, fontSize: 12 }}>{String((writeError as any)?.message || writeError)}</div>}
             </div>

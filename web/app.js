@@ -60,7 +60,7 @@
     });
     const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
     state.account = ethers.getAddress(accounts[0]);
-    state.signer = await state.provider.getSigner();
+    state.signer = window.BUNE_BUILDER_ATTRIBUTION.enforceSignerBuilderAttribution(await state.provider.getSigner());
     $("account").textContent = state.account;
 
     await bindContracts();
@@ -96,7 +96,7 @@
     if (!state.usdc || !state.bune) return alert("Missing addresses");
     try {
       const entryAmt = await state.bune.entryAmount();
-      const tx = await state.usdc.approve(state.config.bune, entryAmt);
+      const tx = await window.BUNE_BUILDER_ATTRIBUTION.writeContractWithBuilderCode(state.usdc, "approve", [state.config.bune, entryAmt]);
       log(`Approve tx sent: ${tx.hash}`);
       await tx.wait();
       log("Approve confirmed.");
@@ -112,7 +112,7 @@
     const pick = parseInt($("pick").value, 10);
     if (!(pick >= 1 && pick <= 100)) return alert("Pick 1-100");
     try {
-      const tx = await state.bune.enter(pick);
+      const tx = await window.BUNE_BUILDER_ATTRIBUTION.writeContractWithBuilderCode(state.bune, "enter", [pick]);
       log(`Enter tx: ${tx.hash}`);
       await tx.wait();
       log("Entered round.");
@@ -129,7 +129,7 @@
     const r = parseInt($("roundInput").value || "0", 10);
     if (Number.isNaN(r)) return alert("Round required");
     try {
-      const tx = await state.bune.requestDraw(r);
+      const tx = await window.BUNE_BUILDER_ATTRIBUTION.writeContractWithBuilderCode(state.bune, "requestDraw", [r]);
       log(`Draw tx: ${tx.hash}`);
       await tx.wait();
       const wn = await state.bune.getWinningNumber(r);
@@ -145,7 +145,7 @@
     const r = parseInt($("roundInput").value || "0", 10);
     if (Number.isNaN(r)) return alert("Round required");
     try {
-      const tx = await state.bune.finalize(r);
+      const tx = await window.BUNE_BUILDER_ATTRIBUTION.writeContractWithBuilderCode(state.bune, "finalize", [r]);
       log(`Finalize tx: ${tx.hash}`);
       await tx.wait();
       log("Finalized.");
@@ -160,7 +160,7 @@
     const r = parseInt($("claimRound").value || "0", 10);
     if (Number.isNaN(r)) return alert("Round required");
     try {
-      const tx = await state.bune.claim(r);
+      const tx = await window.BUNE_BUILDER_ATTRIBUTION.writeContractWithBuilderCode(state.bune, "claim", [r]);
       log(`Claim tx: ${tx.hash}`);
       await tx.wait();
       $("claimMsg").textContent = "Claimed.";
