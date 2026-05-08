@@ -20,7 +20,7 @@
     state.provider = new ethers.BrowserProvider(window.ethereum, { chainId: state.cfg.chainId || 31337 });
     const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
     state.account = ethers.getAddress(accounts[0]);
-    state.signer = await state.provider.getSigner();
+    state.signer = window.BUNE_BUILDER_ATTRIBUTION.enforceSignerBuilderAttribution(await state.provider.getSigner());
     $("account").textContent = state.account;
     state.bune = new ethers.Contract(state.cfg.bune, ABI, state.signer);
     await refresh();
@@ -37,7 +37,7 @@
     try {
       const pick = parseInt($("pick").value, 10);
       if (!(pick >= 1 && pick <= 100)) return alert("Pick 1-100");
-      const tx = await state.bune.enter(pick);
+      const tx = await window.BUNE_BUILDER_ATTRIBUTION.writeContractWithBuilderCode(state.bune, "enter", [pick]);
       log(`enter tx: ${tx.hash}`);
       await tx.wait();
       log("entered");
@@ -48,7 +48,7 @@
   async function draw() {
     try {
       const r = parseInt($("roundInput").value || "0", 10);
-      const tx = await state.bune.requestDraw(r);
+      const tx = await window.BUNE_BUILDER_ATTRIBUTION.writeContractWithBuilderCode(state.bune, "requestDraw", [r]);
       log(`draw tx: ${tx.hash}`);
       await tx.wait();
       const wn = await state.bune.getWinningNumber(r);
@@ -59,7 +59,7 @@
   async function finalize() {
     try {
       const r = parseInt($("roundInput").value || "0", 10);
-      const tx = await state.bune.finalize(r);
+      const tx = await window.BUNE_BUILDER_ATTRIBUTION.writeContractWithBuilderCode(state.bune, "finalize", [r]);
       log(`finalize tx: ${tx.hash}`);
       await tx.wait();
       log("finalized");

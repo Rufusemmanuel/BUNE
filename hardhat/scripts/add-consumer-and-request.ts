@@ -1,5 +1,6 @@
 import { ethers } from "hardhat";
 import * as dotenv from "dotenv";
+import { writeContractWithBuilderCode } from "../lib/builderAttribution";
 
 dotenv.config({ path: __dirname + "/../.env" });
 
@@ -27,7 +28,7 @@ async function main() {
     console.log("nativePayment mode: skipping addConsumer");
   } else {
     try {
-      const tx = await coord.addConsumer(subId, addr);
+      const tx = await writeContractWithBuilderCode(coord, "addConsumer", [subId, addr], signer);
       await tx.wait();
       console.log("Added consumer");
     } catch (e: any) {
@@ -38,14 +39,14 @@ async function main() {
   const game = await ethers.getContractAt("GuessRounds", addr);
   // Ensure on-chain params match env (esp. subId)
   try {
-    const tx0 = await game.setVrfParams(keyHash, subId, callbackGasLimit, requestConfirmations);
+    const tx0 = await writeContractWithBuilderCode(game, "setVrfParams", [keyHash, subId, callbackGasLimit, requestConfirmations], signer);
     await tx0.wait();
     console.log("Updated on-chain VRF params");
   } catch (e: any) {
     console.log("setVrfParams error:", e?.message || e);
   }
   try {
-    const tx2 = await game.requestNextRoundRandomness();
+    const tx2 = await writeContractWithBuilderCode(game, "requestNextRoundRandomness", [], signer);
     await tx2.wait();
     console.log("Requested VRF for next round");
   } catch (e: any) {

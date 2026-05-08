@@ -1,5 +1,9 @@
 import { ethers } from "hardhat";
 import * as dotenv from "dotenv";
+import {
+  deployContractWithBuilderCode,
+  writeContractWithBuilderCode,
+} from "../lib/builderAttribution";
 dotenv.config({ path: __dirname + "/../.env" });
 
 async function main() {
@@ -10,13 +14,12 @@ async function main() {
   const roundDuration = Number(process.env.ROUND_DURATION_SECONDS || "172800"); // default 2 days
 
   const GuessRounds = await ethers.getContractFactory("GuessRounds");
-  const contract = await GuessRounds.deploy(entryFee, roundDuration);
-  await contract.waitForDeployment();
+  const contract = await deployContractWithBuilderCode(GuessRounds, [entryFee, roundDuration]);
   const addr = await contract.getAddress();
   console.log("GuessRounds deployed:", addr);
 
   // Bootstrap first round immediately with pseudo-random target
-  const tx = await contract.startNextRound();
+  const tx = await writeContractWithBuilderCode(contract, "startNextRound");
   await tx.wait();
   console.log("Started first round");
 }

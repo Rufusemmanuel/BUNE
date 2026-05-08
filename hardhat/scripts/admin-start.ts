@@ -1,4 +1,5 @@
 import { ethers } from "hardhat";
+import { writeContractWithBuilderCode } from "../lib/builderAttribution";
 
 /**
  * Admin helper to manually start the next round (VRF fallback).
@@ -21,7 +22,7 @@ async function main() {
   console.log("Manual target:", target);
 
   const game = await ethers.getContractAt("GuessRounds", addr, signer);
-  const tx = await game.adminStartNextRoundManual(target);
+  const tx = await writeContractWithBuilderCode(game, "adminStartNextRoundManual", [target], signer);
   await tx.wait();
   console.log("Started manual round");
 

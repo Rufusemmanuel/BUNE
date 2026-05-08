@@ -6,6 +6,7 @@ import { sdk } from "@farcaster/miniapp-sdk";
 import { wagmiConfig } from "../lib/wagmi";
 
 const queryClient = new QueryClient();
+const WagmiProviderCompat = WagmiProvider as any;
 
 export default function Providers({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -21,9 +22,9 @@ export default function Providers({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <WagmiProvider config={wagmiConfig}>
+    <WagmiProviderCompat config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </WagmiProvider>
+    </WagmiProviderCompat>
   );
 }
 
